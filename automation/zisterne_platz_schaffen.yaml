@@ -6,7 +6,7 @@ blueprint:
     https://senvolon.de/blogs/wissen/home-assistant-zisterne-regenrueckhalt
     Voraussetzung sind die Helfer und Sensoren aus Baustein 1 bis 3 des Artikels.
   domain: automation
-  source_url: https://senvolon.de/blogs/wissen/home-assistant-zisterne-regenrueckhalt
+  source_url: https://github.com/senvolon/home-assistant-blueprints/blob/main/automation/zisterne_platz_schaffen.yaml
   input:
     fuellstand:
       name: Füllstand in Litern

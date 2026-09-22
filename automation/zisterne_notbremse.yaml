@@ -6,7 +6,7 @@ blueprint:
     Zisternen-Reihe von Senvolon:
     https://senvolon.de/blogs/wissen/home-assistant-zisterne-regenrueckhalt
   domain: automation
-  source_url: https://senvolon.de/blogs/wissen/home-assistant-zisterne-regenrueckhalt
+  source_url: https://github.com/senvolon/home-assistant-blueprints/blob/main/automation/zisterne_notbremse.yaml
   input:
     fuellstand:
       name: Füllstand in Litern
