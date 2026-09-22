@@ -1,0 +1,141 @@
+blueprint:
+  name: Zisterne Platz schaffen vor Regen
+  description: >
+    Senkt den Füllstand der Zisterne vor einem angekündigten Regenereignis auf
+    den berechneten Zielstand ab. Teil 3 der Zisternen-Reihe von Senvolon:
+    https://senvolon.de/blogs/wissen/home-assistant-zisterne-regenrueckhalt
+    Voraussetzung sind die Helfer und Sensoren aus Baustein 1 bis 3 des Artikels.
+  domain: automation
+  source_url: https://senvolon.de/blogs/wissen/home-assistant-zisterne-regenrueckhalt
+  input:
+    fuellstand:
+      name: Füllstand in Litern
+      selector:
+        entity:
+          domain: sensor
+    alarm:
+      name: Alarm-Entität des Sensors (MIN sperrt das Ablassen)
+      selector:
+        entity:
+          domain: sensor
+    risiko:
+      name: Überlaufrisiko (Binärsensor aus Baustein 3.2)
+      selector:
+        entity:
+          domain: binary_sensor
+    zielstand:
+      name: Zielstand vor Regen (Sensor aus Baustein 3.1)
+      selector:
+        entity:
+          domain: sensor
+    prognose:
+      name: Regenertrag 48 h (Sensor aus Baustein 2, mit Attribut regen_mm_48h)
+      selector:
+        entity:
+          domain: sensor
+    freigabe:
+      name: Freigabeschalter Regenrückhalt
+      selector:
+        entity:
+          domain: input_boolean
+    wetter:
+      name: Wetter-Entität (für die Frostgrenze)
+      selector:
+        entity:
+          domain: weather
+    wasserabgabe:
+      name: Schalter der Wasserabgabe (Ventil, Gartenpumpe, Tauchpumpe)
+      selector:
+        entity:
+          domain: switch
+    benachrichtigung:
+      name: Benachrichtigungsdienst
+      description: z. B. notify.mobile_app_ihr_smartphone (Entwicklerwerkzeuge → Aktionen → nach notify. filtern)
+      default: notify.notify
+      selector:
+        text:
+    regen_mindestens:
+      name: Regen, ab dem abgesenkt wird
+      default: 8
+      selector:
+        number:
+          min: 1
+          max: 50
+          unit_of_measurement: mm
+    zeitlimit:
+      name: Zeitlimit für einen Ablassvorgang
+      default: 4
+      selector:
+        number:
+          min: 1
+          max: 12
+          unit_of_measurement: h
+
+variables:
+  fuellstand: !input fuellstand
+  zielstand: !input zielstand
+  prognose: !input prognose
+  wasserabgabe: !input wasserabgabe
+  regen_mindestens: !input regen_mindestens
+  zeitlimit: !input zeitlimit
+
+triggers:
+  - trigger: state
+    entity_id: !input risiko
+    to: "on"
+    for:
+      minutes: 30
+conditions:
+  - condition: state
+    entity_id: !input freigabe
+    state: "on"
+  - condition: time
+    after: "08:00:00"
+    before: "20:00:00"
+  - condition: numeric_state
+    entity_id: !input wetter
+    attribute: temperature
+    above: 3
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: !input alarm
+        state: MIN
+actions:
+  - variables:
+      fluid: "{{ states(fuellstand) | float(0) | round(0) | int }}"
+      ziel: "{{ states(zielstand) | float(0) | round(0) | int }}"
+      ablassen: "{{ fluid - ziel }}"
+      regen_mm: "{{ state_attr(prognose, 'regen_mm_48h') | float(0) }}"
+      prognose_l: "{{ states(prognose) | float(0) | round(0) | int }}"
+  - action: !input benachrichtigung
+    data:
+      title: "Zisterne: Platz schaffen"
+      message: >
+        In 48 h werden {{ regen_mm }} mm Regen erwartet, das sind rund
+        {{ prognose_l }} L für die Zisterne. Aktuell {{ fluid }} L,
+        Zielstand {{ ziel }} L. Die Wasserabgabe startet und lässt
+        {{ ablassen }} L ab.
+  - action: switch.turn_on
+    target:
+      entity_id: !input wasserabgabe
+  - wait_template: >
+      {{ states(fuellstand) | float(0) <= states(zielstand) | float(0)
+         or state_attr(prognose, 'regen_mm_48h') | float(0) < regen_mindestens }}
+    timeout:
+      hours: "{{ zeitlimit }}"
+    continue_on_timeout: true
+  - action: switch.turn_off
+    target:
+      entity_id: !input wasserabgabe
+  - action: !input benachrichtigung
+    data:
+      title: "Zisterne: Wasserabgabe beendet"
+      message: >
+        {% set fluid = states(fuellstand) | float(0) %}
+        {% set ziel = states(zielstand) | float(0) %}
+        Füllstand jetzt {{ fluid | round(0) | int }} L.
+        {% if not wait.completed %}Zeitlimit von {{ zeitlimit }} h erreicht, bitte Ventil und Sensor prüfen.
+        {% elif fluid <= ziel %}Zielstand von {{ ziel | round(0) | int }} L erreicht.
+        {% else %}Regenprognose zurückgenommen, Absenken nicht mehr nötig.{% endif %}
+mode: single

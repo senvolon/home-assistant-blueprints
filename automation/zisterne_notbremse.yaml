@@ -1,0 +1,69 @@
+blueprint:
+  name: Zisterne Ablassen stoppen (Notbremse)
+  description: >
+    Schaltet die Wasserabgabe ab, sobald der Mindestfüllstand unterschritten
+    wird oder der Sensor ausfällt, und prüft auch beim Einschalten. Teil 3 der
+    Zisternen-Reihe von Senvolon:
+    https://senvolon.de/blogs/wissen/home-assistant-zisterne-regenrueckhalt
+  domain: automation
+  source_url: https://senvolon.de/blogs/wissen/home-assistant-zisterne-regenrueckhalt
+  input:
+    fuellstand:
+      name: Füllstand in Litern
+      selector:
+        entity:
+          domain: sensor
+    mindestfuellstand:
+      name: Mindestfüllstand (Zahlenwert-Helfer aus Baustein 1.1)
+      selector:
+        entity:
+          domain: input_number
+    wasserabgabe:
+      name: Schalter der Wasserabgabe
+      selector:
+        entity:
+          domain: switch
+    benachrichtigung:
+      name: Benachrichtigungsdienst
+      description: z. B. notify.mobile_app_ihr_smartphone
+      default: notify.notify
+      selector:
+        text:
+
+triggers:
+  - trigger: numeric_state
+    entity_id: !input fuellstand
+    below: !input mindestfuellstand
+  - trigger: state
+    entity_id: !input fuellstand
+    to:
+      - unavailable
+      - unknown
+    for:
+      minutes: 5
+  - trigger: state
+    entity_id: !input wasserabgabe
+    to: "on"
+conditions:
+  - condition: state
+    entity_id: !input wasserabgabe
+    state: "on"
+  - condition: or
+    conditions:
+      - condition: numeric_state
+        entity_id: !input fuellstand
+        below: !input mindestfuellstand
+      - condition: state
+        entity_id: !input fuellstand
+        state:
+          - unavailable
+          - unknown
+actions:
+  - action: switch.turn_off
+    target:
+      entity_id: !input wasserabgabe
+  - action: !input benachrichtigung
+    data:
+      title: "Zisterne: Notbremse"
+      message: "Mindestfüllstand erreicht oder Sensor nicht erreichbar, Wasserabgabe gestoppt."
+mode: single
