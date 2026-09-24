@@ -11,3 +11,7 @@ Import: im Artikel auf „In Home Assistant importieren“ klicken oder unter
 **Einstellungen → Automationen → Blueprints → Blueprint importieren** die Adresse der Datei eintragen.
 
 Getestet mit Home Assistant 2026.9.
+
+Fragen oder Fehler: bitte als [Issue](https://github.com/senvolon/home-assistant-blueprints/issues) melden.
+
+Lizenz: [MIT](LICENSE)
