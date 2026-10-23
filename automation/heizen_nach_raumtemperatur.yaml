@@ -1,0 +1,88 @@
+blueprint:
+  name: Heizen nach Raumtemperatur regeln
+  description: >
+    Ein Thermostat am Heizkörper misst wärmer als der Raum. Diese Automation
+    vergleicht alle 15 Minuten die Temperatur am Thermostat mit der des
+    Präsenzmelders und verschiebt den Sollwert um den Unterschied, höchstens
+    um einen einstellbaren Betrag. Ob Komfort- oder Absenktemperatur gilt,
+    liest sie aus dem Helfer „Raum belegt“ des Blueprints „Heizen nach
+    Anwesenheit“. Aus dem How-to von Senvolon:
+    https://senvolon.de/blogs/wissen/home-assistant-heizung-nach-anwesenheit
+  domain: automation
+  source_url: https://github.com/senvolon/home-assistant-blueprints/blob/main/automation/heizen_nach_raumtemperatur.yaml
+  input:
+    thermostat:
+      name: Thermostat des Raums
+      selector:
+        entity:
+          domain: climate
+    raumtemperatur:
+      name: Raumtemperatur vom Präsenzmelder
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+    komfort:
+      name: Komforttemperatur (Zahlenwert-Helfer)
+      selector:
+        entity:
+          domain: input_number
+    absenk:
+      name: Absenktemperatur (Zahlenwert-Helfer)
+      selector:
+        entity:
+          domain: input_number
+    hauptschalter:
+      name: Hauptschalter (Schalter-Helfer)
+      selector:
+        entity:
+          domain: input_boolean
+    belegt:
+      name: Raum belegt (Schalter-Helfer aus „Heizen nach Anwesenheit“)
+      selector:
+        entity:
+          domain: input_boolean
+    max_aufschlag:
+      name: Höchster Aufschlag auf den Sollwert
+      default: 4
+      selector:
+        number:
+          min: 0
+          max: 8
+          step: 0.5
+          unit_of_measurement: °C
+
+mode: single
+triggers:
+  - trigger: time_pattern
+    minutes: /15
+variables:
+  thermostat: !input thermostat
+  raum_sensor: !input raumtemperatur
+  komfort_helfer: !input komfort
+  absenk_helfer: !input absenk
+  belegt_helfer: !input belegt
+  aufschlag: !input max_aufschlag
+  ziel: >
+    {{ states(komfort_helfer) | float if is_state(belegt_helfer, 'on')
+       else states(absenk_helfer) | float }}
+  am_thermostat: "{{ state_attr(thermostat, 'current_temperature') | float(0) }}"
+  im_raum: "{{ states(raum_sensor) | float(0) }}"
+  sollwert: "{{ [[ziel + am_thermostat - im_raum, ziel] | max, ziel + aufschlag | float] | min | round(1) }}"
+conditions:
+  - condition: state
+    entity_id: !input hauptschalter
+    state: "on"
+  - condition: template
+    value_template: "{{ not is_state(thermostat, 'off') }}"
+  - condition: template
+    value_template: "{{ am_thermostat > 0 and im_raum > 0 }}"
+  - condition: template
+    value_template: >
+      {{ (sollwert - state_attr(thermostat, 'temperature') | float(0)) | abs >= 0.5 }}
+actions:
+  - action: climate.set_temperature
+    target:
+      entity_id: !input thermostat
+    data:
+      temperature: "{{ sollwert }}"

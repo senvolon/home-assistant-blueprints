@@ -1,0 +1,76 @@
+blueprint:
+  name: Lüften mit abgedrehter Heizung (Taste)
+  description: >
+    Ein Druck auf die Taste dreht die Heizung für die Lüftungszeit ab. Danach
+    erinnert Home Assistant ans Schließen der Fenster und stellt die
+    Komforttemperatur wieder ein. Kennt das Thermostat keinen Modus „off“,
+    ist dieser Blueprint nicht geeignet. Aus dem How-to von Senvolon:
+    https://senvolon.de/blogs/wissen/home-assistant-heizung-nach-anwesenheit
+  domain: automation
+  source_url: https://github.com/senvolon/home-assistant-blueprints/blob/main/automation/lueften_taste.yaml
+  input:
+    taste:
+      name: Taste „Lüften“ (Tasten-Helfer)
+      selector:
+        entity:
+          domain: input_button
+    thermostat:
+      name: Thermostat des Raums
+      selector:
+        entity:
+          domain: climate
+    komfort:
+      name: Komforttemperatur (Zahlenwert-Helfer)
+      selector:
+        entity:
+          domain: input_number
+    raum:
+      name: Raumname für die Nachricht
+      default: Wohnzimmer
+      selector:
+        text:
+    dauer:
+      name: Lüftungszeit
+      description: Im Winter reichen laut Umweltbundesamt etwa fünf Minuten.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 30
+          unit_of_measurement: min
+    benachrichtigung:
+      name: Benachrichtigungsdienst
+      description: z. B. notify.mobile_app_ihr_smartphone
+      default: notify.notify
+      selector:
+        text:
+
+mode: restart
+variables:
+  komfort_helfer: !input komfort
+  raum: !input raum
+triggers:
+  - trigger: state
+    entity_id: !input taste
+actions:
+  - action: climate.set_hvac_mode
+    target:
+      entity_id: !input thermostat
+    data:
+      hvac_mode: "off"
+  - delay:
+      minutes: !input dauer
+  - action: !input benachrichtigung
+    data:
+      title: "Fenster schließen"
+      message: "Die Heizung im {{ raum }} läuft wieder."
+  - action: climate.set_hvac_mode
+    target:
+      entity_id: !input thermostat
+    data:
+      hvac_mode: heat
+  - action: climate.set_temperature
+    target:
+      entity_id: !input thermostat
+    data:
+      temperature: "{{ states(komfort_helfer) | float }}"

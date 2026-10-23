@@ -1,0 +1,91 @@
+blueprint:
+  name: Lüften nach Luftfeuchte (Hinweis)
+  description: >
+    Meldet aufs Smartphone, wenn die Luftfeuchte im Raum eine Weile über der
+    Schwelle liegt und jemand da ist, der lüften kann. Ist niemand im Raum,
+    kommt der Hinweis, sobald jemand ihn betritt. Danach eine Pause, damit
+    nicht jedes Betreten erneut erinnert. Aus dem How-to von Senvolon:
+    https://senvolon.de/blogs/wissen/home-assistant-heizung-nach-anwesenheit
+  domain: automation
+  source_url: https://github.com/senvolon/home-assistant-blueprints/blob/main/automation/lueften_hinweis.yaml
+  input:
+    luftfeuchte:
+      name: Luftfeuchte vom Präsenzmelder
+      selector:
+        entity:
+          domain: sensor
+          device_class: humidity
+    praesenz:
+      name: Präsenz des Raums
+      selector:
+        entity:
+          domain: binary_sensor
+    raum:
+      name: Raumname für die Nachricht
+      default: Wohnzimmer
+      selector:
+        text:
+    schwelle:
+      name: Schwelle
+      description: Das Umweltbundesamt nennt 40 bis 60 % als gute Luftfeuchte.
+      default: 60
+      selector:
+        number:
+          min: 40
+          max: 90
+          unit_of_measurement: "%"
+    dauer:
+      name: So lange über der Schwelle
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 120
+          unit_of_measurement: min
+    pause:
+      name: Pause nach einem Hinweis
+      default: 2
+      selector:
+        number:
+          min: 0.5
+          max: 12
+          step: 0.5
+          unit_of_measurement: h
+    benachrichtigung:
+      name: Benachrichtigungsdienst
+      description: z. B. notify.mobile_app_ihr_smartphone
+      default: notify.notify
+      selector:
+        text:
+
+mode: single
+max_exceeded: silent
+variables:
+  feuchte_sensor: !input luftfeuchte
+  raum: !input raum
+  pause_h: !input pause
+triggers:
+  - trigger: numeric_state
+    entity_id: !input luftfeuchte
+    above: !input schwelle
+    for:
+      minutes: !input dauer
+  - trigger: state
+    entity_id: !input praesenz
+    to: "on"
+conditions:
+  - condition: numeric_state
+    entity_id: !input luftfeuchte
+    above: !input schwelle
+  - condition: state
+    entity_id: !input praesenz
+    state: "on"
+actions:
+  - action: !input benachrichtigung
+    data:
+      title: "Bitte lüften"
+      message: >
+        Luftfeuchte im {{ raum }}: {{ states(feuchte_sensor) | round(0) }} %.
+        Fenster für fünf Minuten weit öffnen.
+  - delay:
+      minutes: "{{ (pause_h | float * 60) | int }}"
